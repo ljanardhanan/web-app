@@ -1,0 +1,33 @@
+<!-- public/driver.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Driver – Bus Tracker</title>
+</head>
+<body>
+  <h2>Driver – School Bus</h2>
+
+  <label for="institutionSelect">Institution:</label>
+  <select id="institutionSelect">
+    <!-- For now, hard-code one; later you can load from Firestore -->
+    <option value="Downingtown_STEM_Academy">Downingtown STEM Academy</option>
+  </select>
+
+  <label for="routeSelect">Route:</label>
+  <select id="routeSelect">
+    <!-- For now, hard-code one; later load from routes collection -->
+    <option value="Downingtown_STEM_Academy-259">
+      Downingtown STEM Academy – Bus 259
+    </option>
+  </select>
+
+  <br /><br />
+  <button id="startTripBtn">Start Trip</button>
+  <button id="endTripBtn" disabled>End Trip</button>
+
+  <p id="statusText">Status: idle</p>
+
+  <script type="module" src="./driver.js"></script>
+</body>
+</html>

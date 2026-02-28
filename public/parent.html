@@ -1,0 +1,36 @@
+<!-- public/parent.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Parent – Bus Tracker</title>
+</head>
+<body>
+  <h2>Parent – Track Bus</h2>
+
+  <label for="institutionSelect">Institution:</label>
+  <select id="institutionSelect">
+    <option value="Downingtown_STEM_Academy">Downingtown STEM Academy</option>
+  </select>
+
+  <label for="routeSelect">Route:</label>
+  <select id="routeSelect">
+    <option value="Downingtown_STEM_Academy-259">
+      Downingtown STEM Academy – Bus 259
+    </option>
+  </select>
+
+  <br /><br />
+
+  <label for="stopSelect">Your stop:</label>
+  <select id="stopSelect"></select>
+
+  <p id="tripStatus">Status: unknown</p>
+  <p id="startTimeText">Start time: -</p>
+  <p id="lastUpdateText">Last bus update: -</p>
+  <p id="passedText">Stops passed: -</p>
+  <p id="remainingText">Stops remaining before your stop: -</p>
+
+  <script type="module" src="./parent.js"></script>
+</body>
+</html>
