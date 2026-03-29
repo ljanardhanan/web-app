@@ -1,9 +1,49 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read and write all documents
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    // User profile documents: users can read/write their own profile.
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+
+    // Stops and routes are readable by signed-in users.
+    match /stops/{stopId} {
+      allow read: if isSignedIn();
+      allow write: if hasRole('driver');
+    }
+
+    match /routes/{routeId} {
+      allow read: if isSignedIn();
+      allow write: if hasRole('driver');
+    }
+
+    // Trip data: drivers write, parents read.
+    match /trips/{tripId} {
+      allow read: if isSignedIn();
+      allow write: if hasRole('driver');
+    }
+
+    match /currentTrip/{routeId} {
+      allow read: if isSignedIn();
+      allow write: if hasRole('driver');
+    }
+
+    match /busLocation/{routeId} {
+      allow read: if isSignedIn();
+      allow write: if hasRole('driver');
+    }
+
+    // Fallback: deny all other access.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

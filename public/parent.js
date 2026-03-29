@@ -1,18 +1,30 @@
 // public/parent.js
-import { db } from "./firebase-config.js";
+import { db, auth } from "./firebase-config.js";
 import {
   collection,
   doc,
+  getDoc,
+  setDoc,
   getDocs,
   onSnapshot,
   query,
   where,
   orderBy,
+  Timestamp,
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
 const institutionSelect = document.getElementById("institutionSelect");
 const routeSelect = document.getElementById("routeSelect");
 const stopSelect = document.getElementById("stopSelect");
+const signInBtn = document.getElementById("signInBtn");
+const signOutBtn = document.getElementById("signOutBtn");
+const userText = document.getElementById("userText");
 const tripStatusEl = document.getElementById("tripStatus");
 const startTimeText = document.getElementById("startTimeText");
 const lastUpdateText = document.getElementById("lastUpdateText");
@@ -32,7 +44,55 @@ function getCurrentRouteId() {
   return routeSelect.value;
 }
 
+function setUiForSignedIn(user) {
+  userText.textContent = `Signed in as ${user.displayName || user.email}`;
+  signInBtn.disabled = true;
+  signOutBtn.disabled = false;
+  institutionSelect.disabled = false;
+  routeSelect.disabled = false;
+  stopSelect.disabled = false;
+  tripStatusEl.textContent = "Status: waiting for route updates";
+}
+
+function setUiSignedOut() {
+  userText.textContent = "Not signed in";
+  signInBtn.disabled = false;
+  signOutBtn.disabled = true;
+  institutionSelect.disabled = true;
+  routeSelect.disabled = true;
+  stopSelect.disabled = true;
+  tripStatusEl.textContent = "Status: sign in required";
+}
+
+async function ensureUserRole(uid, role) {
+  const userDocRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userDocRef);
+  if (!userSnap.exists()) {
+    await setDoc(userDocRef, {
+      role,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    return;
+  }
+  const data = userSnap.data();
+  if (data.role !== role) {
+    await setDoc(userDocRef, {
+      role,
+      updatedAt: Timestamp.now(),
+    }, { merge: true });
+  }
+}
+
+function requireAuth() {
+  if (!auth.currentUser) {
+    throw new Error("You must sign in before using the parent interface.");
+  }
+  return auth.currentUser;
+}
+
 async function loadStops() {
+  requireAuth();
   const institutionId = getCurrentInstitutionId();
   const routeId = getCurrentRouteId();
 
@@ -70,6 +130,7 @@ function updateRemaining() {
 }
 
 function subscribeCurrentTrip() {
+  requireAuth();
   const routeId = getCurrentRouteId();
 
   onSnapshot(doc(db, "currentTrip", routeId), (snap) => {
@@ -88,6 +149,7 @@ function subscribeCurrentTrip() {
 }
 
 function subscribeTripDetails(tripId) {
+  requireAuth();
   const routeId = getCurrentRouteId();
 
   onSnapshot(doc(db, "trips", tripId), (snap) => {
@@ -108,18 +170,49 @@ function subscribeTripDetails(tripId) {
 }
 
 institutionSelect.addEventListener("change", async () => {
+  if (!auth.currentUser) return;
   await loadStops();
   subscribeCurrentTrip();
 });
 
 routeSelect.addEventListener("change", async () => {
+  if (!auth.currentUser) return;
   await loadStops();
   subscribeCurrentTrip();
 });
 
 stopSelect.addEventListener("change", updateRemaining);
 
-(async function init() {
-  await loadStops();
-  subscribeCurrentTrip();
-})();
+const provider = new GoogleAuthProvider();
+
+signInBtn.addEventListener("click", async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error("Sign-in failed", error);
+    alert(`Sign-in error: ${error.message}`);
+  }
+});
+
+signOutBtn.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+    setUiSignedOut();
+  } catch (error) {
+    console.error("Sign-out failed", error);
+    alert(`Sign-out error: ${error.message}`);
+  }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    await ensureUserRole(user.uid, "parent");
+    setUiForSignedIn(user);
+    await loadStops();
+    subscribeCurrentTrip();
+  } else {
+    setUiSignedOut();
+  }
+});
+
+setUiSignedOut();

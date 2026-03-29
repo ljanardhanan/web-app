@@ -1,10 +1,11 @@
 // public/driver.js
-import { db } from "./firebase-config.js";
+import { db, auth } from "./firebase-config.js";
 import {
   collection,
   addDoc,
   doc,
   setDoc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -12,11 +13,20 @@ import {
   Timestamp,
   updateDoc,
 } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
 const institutionSelect = document.getElementById("institutionSelect");
 const routeSelect = document.getElementById("routeSelect");
 const startBtn = document.getElementById("startTripBtn");
 const endBtn = document.getElementById("endTripBtn");
+const signInBtn = document.getElementById("signInBtn");
+const signOutBtn = document.getElementById("signOutBtn");
+const userText = document.getElementById("userText");
 const statusText = document.getElementById("statusText");
 
 let watchId = null;
@@ -60,7 +70,57 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+function setUiForSignedIn(user) {
+  userText.textContent = `Signed in as ${user.displayName || user.email}`;
+  signInBtn.disabled = true;
+  signOutBtn.disabled = false;
+  startBtn.disabled = false;
+  routeSelect.disabled = false;
+  institutionSelect.disabled = false;
+}
+
+function setUiSignedOut() {
+  userText.textContent = "Not signed in";
+  signInBtn.disabled = false;
+  signOutBtn.disabled = true;
+  startBtn.disabled = true;
+  endBtn.disabled = true;
+  routeSelect.disabled = true;
+  institutionSelect.disabled = true;
+  statusText.textContent = "Status: sign in required";
+}
+
+async function ensureUserRole(uid, role) {
+  const userDocRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userDocRef);
+  if (!userSnap.exists()) {
+    await setDoc(userDocRef, {
+      role,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    return;
+  }
+  const data = userSnap.data();
+  if (data.role !== role) {
+    await setDoc(userDocRef, {
+      role,
+      updatedAt: Timestamp.now(),
+    }, { merge: true });
+  }
+}
+
+function requireAuth() {
+  if (!auth.currentUser) {
+    throw new Error("You must sign in before using the driver interface.");
+  }
+  return auth.currentUser;
+}
+
 async function startTrip() {
+  const user = requireAuth();
+  await ensureUserRole(user.uid, "driver");
+
   const institutionId = getCurrentInstitutionId();
   const routeId = getCurrentRouteId();
   alert("Inside startTrip.")
@@ -173,6 +233,9 @@ async function handlePosition(pos, institutionId, routeId) {
 }
 
 async function endTrip() {
+  const user = requireAuth();
+  await ensureUserRole(user.uid, "driver");
+
   if (!activeTripId) return;
 
   const routeId = getCurrentRouteId();
@@ -205,5 +268,39 @@ async function endTrip() {
   endBtn.disabled = true;
 }
 
+const provider = new GoogleAuthProvider();
+
+signInBtn.addEventListener("click", async () => {
+  try {
+    statusText.textContent = "Signing in...";
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error("Sign-in failed", error);
+    statusText.textContent = "Sign-in failed.";
+    alert(`Sign-in error: ${error.message}`);
+  }
+});
+
+signOutBtn.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+    setUiSignedOut();
+  } catch (error) {
+    console.error("Sign-out failed", error);
+    alert(`Sign-out error: ${error.message}`);
+  }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    await ensureUserRole(user.uid, "driver");
+    setUiForSignedIn(user);
+    statusText.textContent = "Status: ready (driver)";
+  } else {
+    setUiSignedOut();
+  }
+});
+
 startBtn.addEventListener("click", startTrip);
 endBtn.addEventListener("click", endTrip);
+setUiSignedOut();
