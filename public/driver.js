@@ -176,7 +176,7 @@ async function startTrip() {
       // Call the position handler
       await handlePosition(fakePos, institutionId, routeId);
       simIndex++;
-    }, 5000); // Update every 5 seconds
+    }, 60000); // Update every 60 seconds
   } else {
     if (!navigator.geolocation) {
       alert("Geolocation not supported.");
@@ -200,6 +200,8 @@ async function handlePosition(pos, institutionId, routeId) {
   const { latitude, longitude } = pos.coords;
 
   console.log("Handling position:", latitude, longitude);
+  alert("Adding bus location to Firestore."
+    + latitude + ", " + longitude+ ", time" + Timestamp.now());
 
   await setDoc(doc(db, "busLocation", routeId), {
     institutionId,
