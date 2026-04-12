@@ -271,9 +271,12 @@ async function endTrip() {
 const provider = new GoogleAuthProvider();
 
 signInBtn.addEventListener("click", async () => {
+  console.log("Sign in button clicked");
   try {
     statusText.textContent = "Signing in...";
+    console.log("Calling signInWithPopup");
     await signInWithPopup(auth, provider);
+    console.log("Sign in successful");
   } catch (error) {
     console.error("Sign-in failed", error);
     statusText.textContent = "Sign-in failed.";
