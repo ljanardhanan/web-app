@@ -23,6 +23,7 @@ import {
 const institutionSelect = document.getElementById("institutionSelect");
 const routeSelect = document.getElementById("routeSelect");
 const directionSelect = document.getElementById("directionSelect");
+const simulationCheckbox = document.getElementById("simulationCheckbox");
 const startBtn = document.getElementById("startTripBtn");
 const endBtn = document.getElementById("endTripBtn");
 const signInBtn = document.getElementById("signInBtn");
@@ -35,8 +36,9 @@ let activeTripId = null;
 let stops = [];
 let currentStopIndex = 0;
 
-// Set to true to simulate location changes for debugging
-const DEBUG_SIMULATE = true;
+function isSimulationEnabled() {
+  return simulationCheckbox?.checked;
+}
 
 function getCurrentInstitutionId() {
   return institutionSelect.value;
@@ -167,11 +169,12 @@ async function startTrip() {
     startTime: Timestamp.now(),
   });
 
-  statusText.textContent = `Status: in progress (${direction === "from_school" ? "From School" : "To School"})`;
+  const useSimulation = isSimulationEnabled();
+  statusText.textContent = `Status: in progress (${direction === "from_school" ? "From School" : "To School"}) - ${useSimulation ? "Simulation" : "Live GPS"}`;
   startBtn.disabled = true;
   endBtn.disabled = false;
 
-  if (DEBUG_SIMULATE) {
+  if (useSimulation) {
     // Simulate location updates for debugging
     let simIndex = 0;
     watchId = setInterval(async () => {
