@@ -107,7 +107,14 @@ async function loadStops() {
     orderBy("sequence", "asc")
   );
   const snap = await getDocs(qStops);
-  stops = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  stops = snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      sequence: Number(data.sequence),
+    };
+  });
   if (direction === "to_school") {
     stops = [...stops].reverse();
   }
@@ -116,7 +123,7 @@ async function loadStops() {
   stopSelect.innerHTML = "";
   stops.forEach((s) => {
     const opt = document.createElement("option");
-    opt.value = s.sequence;
+    opt.value = String(s.sequence);
     opt.textContent = `${s.sequence} – ${s.name}`;
     stopSelect.appendChild(opt);
   });
@@ -130,9 +137,11 @@ function formatTs(ts) {
 }
 
 function updateRemaining() {
-  const yourStopSequence = parseInt(stopSelect.value || "1", 10);
-  const yourStopIndex = stops.findIndex((stop) => stop.sequence === yourStopSequence);
-  const remaining = yourStopIndex < 0 ? 0 : Math.max(yourStopIndex - currentStopIndex, 0);
+  const yourStopSequence = Number(stopSelect.value || (stops.length ? stops[0].sequence : 1));
+  const yourStopIndex = stops.findIndex(
+    (stop) => Number(stop.sequence) === yourStopSequence
+  );
+  const remaining = yourStopIndex < 0 ? 0 : Math.max(yourStopIndex - Number(currentStopIndex), 0);
   passedText.textContent = `Stops passed: ${currentStopIndex} of ${totalStops}`;
   remainingText.textContent = `Stops remaining before your stop: ${remaining}`;
 }
@@ -163,7 +172,7 @@ function subscribeTripDetails(tripId) {
   onSnapshot(doc(db, "trips", tripId), (snap) => {
     if (!snap.exists()) return;
     const data = snap.data();
-    currentStopIndex = data.currentStopIndex || 0;
+    currentStopIndex = Number(data.currentStopIndex) || 0;
     updateRemaining();
   });
 
