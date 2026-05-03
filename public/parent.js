@@ -21,6 +21,7 @@ import {
 
 const institutionSelect = document.getElementById("institutionSelect");
 const routeSelect = document.getElementById("routeSelect");
+const directionSelect = document.getElementById("directionSelect");
 const stopSelect = document.getElementById("stopSelect");
 const signInBtn = document.getElementById("signInBtn");
 const signOutBtn = document.getElementById("signOutBtn");
@@ -50,6 +51,7 @@ function setUiForSignedIn(user) {
   signOutBtn.disabled = false;
   institutionSelect.disabled = false;
   routeSelect.disabled = false;
+  directionSelect.disabled = false;
   stopSelect.disabled = false;
   tripStatusEl.textContent = "Status: waiting for route updates";
 }
@@ -60,6 +62,7 @@ function setUiSignedOut() {
   signOutBtn.disabled = true;
   institutionSelect.disabled = true;
   routeSelect.disabled = true;
+  directionSelect.disabled = true;
   stopSelect.disabled = true;
   tripStatusEl.textContent = "Status: sign in required";
 }
@@ -95,6 +98,7 @@ async function loadStops() {
   requireAuth();
   const institutionId = getCurrentInstitutionId();
   const routeId = getCurrentRouteId();
+  const direction = directionSelect?.value || "from_school";
 
   const qStops = query(
     collection(db, "stops"),
@@ -104,6 +108,9 @@ async function loadStops() {
   );
   const snap = await getDocs(qStops);
   stops = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (direction === "to_school") {
+    stops = [...stops].reverse();
+  }
   totalStops = stops.length;
 
   stopSelect.innerHTML = "";
@@ -123,8 +130,9 @@ function formatTs(ts) {
 }
 
 function updateRemaining() {
-  const yourStopIndex = parseInt(stopSelect.value || "1", 10);
-  const remaining = Math.max(yourStopIndex - currentStopIndex, 0);
+  const yourStopSequence = parseInt(stopSelect.value || "1", 10);
+  const yourStopIndex = stops.findIndex((stop) => stop.sequence === yourStopSequence);
+  const remaining = yourStopIndex < 0 ? 0 : Math.max(yourStopIndex - currentStopIndex, 0);
   passedText.textContent = `Stops passed: ${currentStopIndex} of ${totalStops}`;
   remainingText.textContent = `Stops remaining before your stop: ${remaining}`;
 }
@@ -179,6 +187,12 @@ routeSelect.addEventListener("change", async () => {
   if (!auth.currentUser) return;
   await loadStops();
   subscribeCurrentTrip();
+});
+
+directionSelect.addEventListener("change", async () => {
+  if (!auth.currentUser) return;
+  await loadStops();
+  updateRemaining();
 });
 
 stopSelect.addEventListener("change", updateRemaining);

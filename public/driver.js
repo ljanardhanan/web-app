@@ -22,6 +22,7 @@ import {
 
 const institutionSelect = document.getElementById("institutionSelect");
 const routeSelect = document.getElementById("routeSelect");
+const directionSelect = document.getElementById("directionSelect");
 const startBtn = document.getElementById("startTripBtn");
 const endBtn = document.getElementById("endTripBtn");
 const signInBtn = document.getElementById("signInBtn");
@@ -45,7 +46,11 @@ function getCurrentRouteId() {
   return routeSelect.value; // e.g. "Downingtown_STEM_Academy-259"
 }
 
-async function loadStops(institutionId, routeId) {
+function getCurrentDirection() {
+  return directionSelect?.value || "from_school";
+}
+
+async function loadStops(institutionId, routeId, direction) {
   const qStops = query(
     collection(db, "stops"),
     where("institutionId", "==", institutionId),
@@ -54,6 +59,9 @@ async function loadStops(institutionId, routeId) {
   );
   const snap = await getDocs(qStops);
   stops = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (direction === "to_school") {
+    stops = [...stops].reverse();
+  }
 }
 
 function distanceMeters(lat1, lon1, lat2, lon2) {
@@ -77,6 +85,7 @@ function setUiForSignedIn(user) {
   startBtn.disabled = false;
   routeSelect.disabled = false;
   institutionSelect.disabled = false;
+  directionSelect.disabled = false;
 }
 
 function setUiSignedOut() {
@@ -87,6 +96,7 @@ function setUiSignedOut() {
   endBtn.disabled = true;
   routeSelect.disabled = true;
   institutionSelect.disabled = true;
+  directionSelect.disabled = true;
   statusText.textContent = "Status: sign in required";
 }
 
@@ -123,8 +133,9 @@ async function startTrip() {
 
   const institutionId = getCurrentInstitutionId();
   const routeId = getCurrentRouteId();
-  alert("Inside startTrip.")
-  await loadStops(institutionId, routeId);
+  const direction = getCurrentDirection();
+
+  await loadStops(institutionId, routeId, direction);
 
   if (stops.length === 0) {
     alert("No stops configured for this route.");
@@ -137,6 +148,7 @@ async function startTrip() {
     institutionId,
     routeId,
     routeNumber,
+    direction,
     status: "in_progress",
     startTime: Timestamp.now(),
     endTime: null,
@@ -150,11 +162,12 @@ async function startTrip() {
     institutionId,
     routeId,
     tripId: activeTripId,
+    direction,
     status: "in_progress",
     startTime: Timestamp.now(),
   });
 
-  statusText.textContent = "Status: in progress";
+  statusText.textContent = `Status: in progress (${direction === "from_school" ? "From School" : "To School"})`;
   startBtn.disabled = true;
   endBtn.disabled = false;
 
@@ -200,8 +213,6 @@ async function handlePosition(pos, institutionId, routeId) {
   const { latitude, longitude } = pos.coords;
 
   console.log("Handling position:", latitude, longitude);
-  alert("Adding bus location to Firestore."
-    + latitude + ", " + longitude+ ", time" + Timestamp.now());
 
   await setDoc(doc(db, "busLocation", routeId), {
     institutionId,
@@ -230,17 +241,16 @@ async function handlePosition(pos, institutionId, routeId) {
       await updateDoc(doc(db, "trips", activeTripId), {
         currentStopIndex,
       });
+
+      if (currentStopIndex >= stops.length) {
+        await completeTrip(routeId);
+      }
     }
   }
 }
 
-async function endTrip() {
-  const user = requireAuth();
-  await ensureUserRole(user.uid, "driver");
-
+async function completeTrip(routeId) {
   if (!activeTripId) return;
-
-  const routeId = getCurrentRouteId();
 
   if (watchId !== null) {
     if (DEBUG_SIMULATE) {
@@ -254,6 +264,7 @@ async function endTrip() {
   await updateDoc(doc(db, "trips", activeTripId), {
     status: "completed",
     endTime: Timestamp.now(),
+    currentStopIndex,
   });
 
   await setDoc(
@@ -268,6 +279,16 @@ async function endTrip() {
   statusText.textContent = "Status: completed";
   startBtn.disabled = false;
   endBtn.disabled = true;
+}
+
+async function endTrip() {
+  const user = requireAuth();
+  await ensureUserRole(user.uid, "driver");
+
+  if (!activeTripId) return;
+
+  const routeId = getCurrentRouteId();
+  await completeTrip(routeId);
 }
 
 const provider = new GoogleAuthProvider();
