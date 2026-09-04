@@ -30,11 +30,14 @@ const signInBtn = document.getElementById("signInBtn");
 const signOutBtn = document.getElementById("signOutBtn");
 const userText = document.getElementById("userText");
 const statusText = document.getElementById("statusText");
+const stopProgressEl = document.getElementById("stopProgress");
+const distanceTextEl = document.getElementById("distanceText");
 
 let watchId = null;
 let activeTripId = null;
 let stops = [];
 let currentStopIndex = 0;
+let usingSimulation = false;
 
 function isSimulationEnabled() {
   return simulationCheckbox?.checked;
@@ -80,6 +83,21 @@ function distanceMeters(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+function renderStopProgress() {
+  if (!stops.length) {
+    stopProgressEl.innerHTML = "";
+    return;
+  }
+  stopProgressEl.innerHTML = stops
+    .map((s, i) => {
+      const cls =
+        i < currentStopIndex ? "passed" : i === currentStopIndex ? "current" : "";
+      const mark = i < currentStopIndex ? "✓ " : "";
+      return `<li class="${cls}">${mark}${s.sequence} – ${s.name}</li>`;
+    })
+    .join("");
+}
+
 function setUiForSignedIn(user) {
   userText.textContent = `Signed in as ${user.displayName || user.email}`;
   signInBtn.disabled = true;
@@ -100,6 +118,8 @@ function setUiSignedOut() {
   institutionSelect.disabled = true;
   directionSelect.disabled = true;
   statusText.textContent = "Status: sign in required";
+  stopProgressEl.innerHTML = "";
+  distanceTextEl.textContent = "";
 }
 
 async function ensureUserRole(uid, role) {
@@ -159,6 +179,8 @@ async function startTrip() {
 
   activeTripId = tripDoc.id;
   currentStopIndex = 0;
+  renderStopProgress();
+  distanceTextEl.textContent = "";
 
   await setDoc(doc(db, "currentTrip", routeId), {
     institutionId,
@@ -170,6 +192,7 @@ async function startTrip() {
   });
 
   const useSimulation = isSimulationEnabled();
+  usingSimulation = useSimulation;
   statusText.textContent = `Status: in progress (${direction === "from_school" ? "From School" : "To School"}) - ${useSimulation ? "Simulation" : "Live GPS"}`;
   startBtn.disabled = true;
   endBtn.disabled = false;
@@ -236,6 +259,7 @@ async function handlePosition(pos, institutionId, routeId) {
       nextStop.longitude
     );
     console.log("Distance to next stop", currentStopIndex, ":", dist, "meters");
+    distanceTextEl.textContent = `Distance to next stop (${nextStop.sequence} – ${nextStop.name}): ${Math.round(dist)} m`;
 
     const threshold = 80; // meters
     if (dist < threshold) {
@@ -244,6 +268,8 @@ async function handlePosition(pos, institutionId, routeId) {
       await updateDoc(doc(db, "trips", activeTripId), {
         currentStopIndex,
       });
+
+      renderStopProgress();
 
       if (currentStopIndex >= stops.length) {
         await completeTrip(routeId);
@@ -256,7 +282,7 @@ async function completeTrip(routeId) {
   if (!activeTripId) return;
 
   if (watchId !== null) {
-    if (DEBUG_SIMULATE) {
+    if (usingSimulation) {
       clearInterval(watchId);
     } else {
       navigator.geolocation.clearWatch(watchId);
@@ -280,6 +306,7 @@ async function completeTrip(routeId) {
   );
 
   statusText.textContent = "Status: completed";
+  distanceTextEl.textContent = "All stops completed.";
   startBtn.disabled = false;
   endBtn.disabled = true;
 }

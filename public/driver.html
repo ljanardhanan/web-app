@@ -4,6 +4,17 @@
 <head>
   <meta charset="UTF-8" />
   <title>Driver – Bus Tracker</title>
+  <style>
+    #stopProgress { display: flex; flex-wrap: wrap; gap: 6px; margin: 1rem 0; padding: 0; list-style: none; }
+    #stopProgress li {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 999px; border: 1px solid #ccc;
+      font-size: 0.85rem; white-space: nowrap; background: #f5f5f5; color: #666;
+    }
+    #stopProgress li.passed { background: #d1fae5; border-color: #34d399; color: #065f46; }
+    #stopProgress li.current { background: #dbeafe; border-color: #3b82f6; color: #1e3a8a; font-weight: bold; }
+    #distanceText { font-size: 1.1rem; }
+  </style>
 </head>
 <body>
   <h2>Driver – School Bus</h2>
@@ -39,6 +50,9 @@
 
   <p id="userText">Not signed in</p>
   <p id="statusText">Status: idle</p>
+
+  <ul id="stopProgress"></ul>
+  <p id="distanceText"></p>
 
   <script type="module" src="./driver.js"></script>
 </body>
