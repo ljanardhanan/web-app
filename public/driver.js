@@ -165,6 +165,8 @@ async function startTrip() {
   }
 
   const routeNumber = 259; // or fetch from routes collection later
+  const useSimulation = isSimulationEnabled();
+  usingSimulation = useSimulation;
 
   const tripDoc = await addDoc(collection(db, "trips"), {
     institutionId,
@@ -175,6 +177,7 @@ async function startTrip() {
     startTime: Timestamp.now(),
     endTime: null,
     currentStopIndex: 0,
+    useSimulation,
   });
 
   activeTripId = tripDoc.id;
@@ -189,17 +192,20 @@ async function startTrip() {
     direction,
     status: "in_progress",
     startTime: Timestamp.now(),
+    useSimulation,
   });
 
-  const useSimulation = isSimulationEnabled();
-  usingSimulation = useSimulation;
   statusText.textContent = `Status: in progress (${direction === "from_school" ? "From School" : "To School"}) - ${useSimulation ? "Simulation" : "Live GPS"}`;
   startBtn.disabled = true;
   endBtn.disabled = false;
 
-  if (useSimulation) {
-    // Simulate location updates for debugging
-    let simIndex = 0;
+  beginTracking(institutionId, routeId);
+}
+
+function beginTracking(institutionId, routeId) {
+  if (usingSimulation) {
+    // Simulate location updates for debugging, resuming from the current stop
+    let simIndex = currentStopIndex;
     watchId = setInterval(async () => {
       if (simIndex >= stops.length) {
         clearInterval(watchId);
@@ -233,6 +239,42 @@ async function startTrip() {
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
     );
   }
+}
+
+async function tryResumeActiveTrip() {
+  const institutionId = getCurrentInstitutionId();
+  const routeId = getCurrentRouteId();
+
+  const currentTripSnap = await getDoc(doc(db, "currentTrip", routeId));
+  if (!currentTripSnap.exists()) return false;
+
+  const currentTripData = currentTripSnap.data();
+  if (currentTripData.status !== "in_progress" || !currentTripData.tripId) {
+    return false;
+  }
+
+  const tripSnap = await getDoc(doc(db, "trips", currentTripData.tripId));
+  if (!tripSnap.exists() || tripSnap.data().status !== "in_progress") {
+    return false;
+  }
+  const tripData = tripSnap.data();
+  const direction = tripData.direction || "from_school";
+
+  activeTripId = currentTripData.tripId;
+  currentStopIndex = Number(tripData.currentStopIndex) || 0;
+  usingSimulation = !!tripData.useSimulation;
+  directionSelect.value = direction;
+  simulationCheckbox.checked = usingSimulation;
+
+  await loadStops(institutionId, routeId, direction);
+  renderStopProgress();
+
+  statusText.textContent = `Status: resumed in progress (${direction === "from_school" ? "From School" : "To School"}) - ${usingSimulation ? "Simulation" : "Live GPS"}`;
+  startBtn.disabled = true;
+  endBtn.disabled = false;
+
+  beginTracking(institutionId, routeId);
+  return true;
 }
 
 async function handlePosition(pos, institutionId, routeId) {
@@ -351,7 +393,10 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     await ensureUserRole(user.uid, "driver");
     setUiForSignedIn(user);
-    statusText.textContent = "Status: ready (driver)";
+    const resumed = await tryResumeActiveTrip();
+    if (!resumed) {
+      statusText.textContent = "Status: ready (driver)";
+    }
   } else {
     setUiSignedOut();
   }
