@@ -110,10 +110,13 @@ mid-drive. Ending the trip can wait until you're stopped/parked.
 3. **Uncheck "Use debug simulation."**
 
 4. Tap **Start Trip**. The browser will prompt for location permission — grant
-   it (choose "Allow While Using App" / "Always Allow" if your OS distinguishes;
-   background tracking while the screen is locked depends on the browser and
-   may pause updates if the phone sleeps — keep the screen on/unlocked and the
-   tab in the foreground for reliable tracking).
+   it (choose "Allow While Using App" / "Always Allow" if your OS distinguishes).
+   The page also requests a Screen Wake Lock automatically once tracking
+   starts (watch for "Screen wake lock: active" under the status text) so the
+   device won't auto-lock on its own. That only covers auto-lock, though — it
+   does **not** survive the tab being backgrounded by switching to another
+   app. See "Dedicated device" below before relying on this in a moving
+   vehicle.
 
 5. Drive the route. Each GPS fix is written to `busLocation/{routeId}` in
    Firestore in real time. Stop-passing is detected automatically once you get
@@ -128,6 +131,20 @@ mid-drive. Ending the trip can wait until you're stopped/parked.
 
 7. Once stopped/parked, tap **End Trip** (or let it auto-complete when the last
    stop is reached).
+
+### Dedicated device (recommended)
+
+Browsers only let a web page keep the screen on while that page's own tab
+stays the foreground app — there's no standard way for a web page to keep
+tracking alive once the user switches to another app (phone call, Maps,
+texting, etc.); the OS suspends the tab's JS and GPS callbacks regardless of
+the Wake Lock. The practical fix, instead of building a native app, is to use
+a spare phone dedicated solely to this page: mount it, keep it plugged into
+power, open the Driver page, and never use it for anything else during the
+route. Since nothing ever switches away from the tab, backgrounding never
+happens. If a trip does still get interrupted (call, restart, etc.), the
+resume logic (see [CLAUDE.md](./CLAUDE.md)) picks it back up automatically
+the next time the page is signed in and foregrounded.
 
 ### Before your first live drive
 
@@ -144,6 +161,7 @@ first.
 | Symptom | Likely cause |
 |---|---|
 | No location permission prompt at all | You're on plain HTTP from a non-localhost origin — geolocation is blocked. Use an HTTPS preview channel or the production URL. |
-| Location stops updating after phone locks/screen off | Background GPS while backgrounded/locked isn't guaranteed in a mobile browser tab — keep the screen on during the drive. |
+| "Screen wake lock not supported" message | Older browser without the Wake Lock API — disable auto-lock manually in the OS settings for this test, or use a different browser. |
+| Tracking stops updating, trip "stuck" at some stop | The tab got backgrounded (app switched away, not just screen auto-lock) — reopen/foreground the page; it resumes automatically from Firestore via `tryResumeActiveTrip()`. Use a dedicated device (see above) to prevent this happening at all. |
 | Stop never registers as "passed" | You may not have gotten within 80m of the stop's stored coordinates, or the stop's lat/lng is wrong — check it in the Firestore console. |
 | Stop registers too early/twice | GPS jitter near the 80m threshold — not currently debounced (see Known Gaps in [CLAUDE.md](./CLAUDE.md)). |

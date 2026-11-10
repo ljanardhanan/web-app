@@ -80,6 +80,18 @@ by the fallback rule.
    haversine distance to the next stop < 80m ⇒ advances `currentStopIndex` and
    updates the `trips` doc. Reaching the last stop auto-completes the trip.
 5. **End Trip** manually completes early.
+6. `trips` and `currentTrip` also persist `useSimulation` and `currentStopIndex`,
+   so `tryResumeActiveTrip()` (run on every sign-in) can detect an `in_progress`
+   trip and resume tracking from where it left off after a page reload/crash —
+   this is what recovers a trip if the browser tab gets killed mid-drive.
+7. On every trip start/resume, `requestWakeLock()` acquires a Screen Wake Lock
+   (`navigator.wakeLock`) to stop the device from auto-locking while a trip is
+   active, re-acquiring it on `visibilitychange` if it's dropped. This only
+   keeps the screen awake while this tab stays the foreground app — it does
+   **not** survive the user switching to a different app, which is why the
+   intended deployment model is a spare phone dedicated solely to running this
+   page (mounted, plugged in, never touched for anything else), not the
+   driver's primary phone.
 
 ## Parent flow (`public/parent.js`)
 
@@ -143,3 +155,12 @@ manual from a developer machine.
 - No automated tests and no CI.
 - Stop-passed detection is a simple 80m-radius haversine check, not
   direction-aware or debounced — noisy GPS could double-trigger.
+- No true background tracking: the Wake Lock keeps the screen on but tracking
+  still stops the moment the browser tab isn't the foreground app (browsers
+  throttle/suspend JS timers and geolocation callbacks for backgrounded tabs).
+  Surviving the driver switching apps would require a native shell (Capacitor
+  or similar) using real OS background-location APIs — not attempted here;
+  the dedicated-device model is the workaround instead.
+- No per-driver trip ownership — any signed-in driver who opens the page with
+  the matching route selected can resume an `in_progress` trip, since `trips`
+  docs don't record which user started them.

@@ -32,12 +32,49 @@ const userText = document.getElementById("userText");
 const statusText = document.getElementById("statusText");
 const stopProgressEl = document.getElementById("stopProgress");
 const distanceTextEl = document.getElementById("distanceText");
+const wakeLockTextEl = document.getElementById("wakeLockText");
 
 let watchId = null;
 let activeTripId = null;
 let stops = [];
 let currentStopIndex = 0;
 let usingSimulation = false;
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    wakeLockTextEl.textContent =
+      "Screen wake lock not supported on this browser — disable auto-lock manually on this device.";
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLockTextEl.textContent = "Screen wake lock: active (this device won't auto-lock during the trip).";
+    wakeLock.addEventListener("release", () => {
+      wakeLock = null;
+      if (activeTripId) {
+        wakeLockTextEl.textContent = "Screen wake lock released — reopen/foreground this tab to reacquire it.";
+      }
+    });
+  } catch (err) {
+    console.error("Wake lock request failed:", err);
+    wakeLockTextEl.textContent = `Screen wake lock failed: ${err.message}`;
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release();
+    wakeLock = null;
+  }
+  wakeLockTextEl.textContent = "";
+}
+
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && activeTripId && !wakeLock) {
+    await requestWakeLock();
+  }
+});
 
 function isSimulationEnabled() {
   return simulationCheckbox?.checked;
@@ -120,6 +157,7 @@ function setUiSignedOut() {
   statusText.textContent = "Status: sign in required";
   stopProgressEl.innerHTML = "";
   distanceTextEl.textContent = "";
+  releaseWakeLock();
 }
 
 async function ensureUserRole(uid, role) {
@@ -203,6 +241,8 @@ async function startTrip() {
 }
 
 function beginTracking(institutionId, routeId) {
+  requestWakeLock();
+
   if (usingSimulation) {
     // Simulate location updates for debugging, resuming from the current stop
     let simIndex = currentStopIndex;
@@ -322,6 +362,8 @@ async function handlePosition(pos, institutionId, routeId) {
 
 async function completeTrip(routeId) {
   if (!activeTripId) return;
+
+  releaseWakeLock();
 
   if (watchId !== null) {
     if (usingSimulation) {
